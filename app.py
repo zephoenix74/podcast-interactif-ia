@@ -3,8 +3,6 @@ import numpy as np
 import os
 import tempfile
 from openai import OpenAI
-import base64
-import time
 
 # Configuration de la page Streamlit
 st.set_page_config(
@@ -21,8 +19,8 @@ st.markdown("""
 """)
 
 # Récupération sécurisée de la clé API
-if 'openai' in st.secrets:
-    client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+if 'openai_api_key' in st.secrets:
+    client = OpenAI(api_key=st.secrets["openai_api_key"])
 else:
     # Fallback pour le développement local ou si la clé n'est pas configurée
     api_key = st.sidebar.text_input("Clé API OpenAI", type="password")
@@ -130,7 +128,6 @@ with main_col2:
                         st.session_state.questions_answers.append({
                             "question": question,
                             "answer": answer_text,
-                            "position": 0,  # Simplification pour le MVP
                             "audio_path": audio_path
                         })
                         
