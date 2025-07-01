@@ -3,6 +3,8 @@ import numpy as np
 import os
 import tempfile
 from openai import OpenAI
+import base64
+import time
 
 # Configuration de la page Streamlit
 st.set_page_config(
@@ -27,6 +29,8 @@ if 'current_position' not in st.session_state:
     st.session_state.current_position = 0
 if 'questions_answers' not in st.session_state:
     st.session_state.questions_answers = []
+if 'audio_response' not in st.session_state:
+    st.session_state.audio_response = None
 
 # Configuration de l'API OpenAI
 api_key = st.sidebar.text_input("Clé API OpenAI", type="password")
@@ -53,6 +57,28 @@ voice_model = st.sidebar.selectbox(
     ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 )
 
+# Fonction pour générer l'audio TTS
+def generate_audio_response(text, voice):
+    if not api_key:
+        return None
+    
+    try:
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice=voice,
+            input=text
+        )
+        
+        # Sauvegarder l'audio dans un fichier temporaire
+        temp_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3').name
+        with open(temp_path, "wb") as f:
+            f.write(response.content)
+        
+        return temp_path
+    except Exception as e:
+        st.error(f"Erreur lors de la génération audio: {str(e)}")
+        return None
+
 # Créer une section principale
 main_col1, main_col2 = st.columns([2, 1])
 
@@ -69,14 +95,17 @@ with main_col1:
         with col1:
             if st.button("▶️ Lecture"):
                 st.session_state.is_playing = True
+                st.rerun()  # Force le rafraîchissement de la page
         with col2:
             if st.button("⏸️ Pause"):
                 st.session_state.is_playing = False
                 st.success("Podcast mis en pause")
+                st.rerun()  # Force le rafraîchissement de la page
         with col3:
             if st.button("🔄 Redémarrer"):
                 st.session_state.current_position = 0
                 st.session_state.is_playing = False
+                st.rerun()  # Force le rafraîchissement de la page
                 
         # Position actuelle (simulée)
         progress = st.slider(
@@ -90,6 +119,11 @@ with main_col1:
         
         # Afficher le temps actuel
         st.text(f"Position actuelle: {int(st.session_state.current_position // 60):02d}:{int(st.session_state.current_position % 60):02d}")
+        
+        # Afficher la réponse audio si disponible
+        if st.session_state.audio_response:
+            st.subheader("Réponse de l'IA")
+            st.audio(st.session_state.audio_response)
     else:
         st.info("Veuillez télécharger un podcast pour commencer.")
 
@@ -98,8 +132,8 @@ with main_col2:
     
     # Zone de texte pour saisir une question
     if st.session_state.podcast_path:
-        # Saisie de la question par texte (en attendant de résoudre les problèmes audio)
-        question = st.text_area("Tapez votre question ici (MVP) :", height=100)
+        # Saisie de la question par texte
+        question = st.text_area("Tapez votre question ici :", height=100)
         
         if st.button("🔍 Poser la question"):
             if question:
@@ -122,22 +156,26 @@ with main_col2:
                             )
                             answer_text = response.choices[0].message.content
                             
-                            # Dans un MVP complet, on convertirait cette réponse en audio avec la voix choisie
-                            # Puis on l'intégrerait au podcast
+                            # Générer l'audio de la réponse
+                            with st.spinner("Génération de la réponse audio..."):
+                                audio_path = generate_audio_response(answer_text, voice_model)
+                                if audio_path:
+                                    st.session_state.audio_response = audio_path
                             
                             # Stocker la question et la réponse
                             st.session_state.questions_answers.append({
                                 "question": question,
                                 "answer": answer_text,
-                                "position": st.session_state.current_position
+                                "position": st.session_state.current_position,
+                                "audio_path": audio_path
                             })
                             
                             # Afficher la réponse
                             st.success("Réponse obtenue!")
                             st.info(answer_text)
                             
-                            # Dans un MVP complet: générer l'audio de la réponse
-                            st.warning("Dans la version complète, cette réponse serait convertie en audio avec la voix choisie.")
+                            # Forcer le rafraîchissement pour afficher l'audio
+                            st.rerun()
                             
                         except Exception as e:
                             st.error(f"Erreur lors de la génération de la réponse: {str(e)}")
@@ -163,6 +201,8 @@ with main_col2:
                 with st.expander(f"Q{i+1}: {qa['question'][:50]}... (@{int(qa['position']//60):02d}:{int(qa['position']%60):02d})"):
                     st.write(f"**Question:** {qa['question']}")
                     st.write(f"**Réponse:** {qa['answer']}")
+                    if "audio_path" in qa and qa["audio_path"]:
+                        st.audio(qa["audio_path"])
 
 # Pied de page
 st.markdown("---")
@@ -176,6 +216,14 @@ def cleanup():
             os.unlink(st.session_state.podcast_path)
         except:
             pass
+    
+    # Nettoyer les fichiers audio temporaires
+    for qa in st.session_state.questions_answers:
+        if "audio_path" in qa and qa["audio_path"] and os.path.exists(qa["audio_path"]):
+            try:
+                os.unlink(qa["audio_path"])
+            except:
+                pass
 
 # Enregistrer la fonction de nettoyage pour qu'elle s'exécute à la fermeture
 import atexit
