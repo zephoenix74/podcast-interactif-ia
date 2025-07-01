@@ -1,3 +1,4 @@
+
 import streamlit as st
 import numpy as np
 import os
@@ -20,6 +21,10 @@ st.markdown("""
     L'IA répondra avec la voix d'un des animateurs du podcast.
 """)
 
+# Clé API OpenAI intégrée directement
+OPENAI_API_KEY = "votre_clé_api_ici"  # Remplacez par votre clé API
+client = OpenAI(api_key=OPENAI_API_KEY)
+
 # Définition des variables de session
 if 'podcast_path' not in st.session_state:
     st.session_state.podcast_path = None
@@ -31,10 +36,8 @@ if 'questions_answers' not in st.session_state:
     st.session_state.questions_answers = []
 if 'audio_response' not in st.session_state:
     st.session_state.audio_response = None
-
-# Configuration de l'API OpenAI
-api_key = st.sidebar.text_input("Clé API OpenAI", type="password")
-client = OpenAI(api_key=api_key) if api_key else None
+if 'audio_player_key' not in st.session_state:
+    st.session_state.audio_player_key = 0
 
 # Sidebar pour télécharger le podcast et afficher les informations
 st.sidebar.header("Configuration du podcast")
@@ -59,14 +62,13 @@ voice_model = st.sidebar.selectbox(
 
 # Fonction pour générer l'audio TTS
 def generate_audio_response(text, voice):
-    if not api_key:
-        return None
-    
     try:
         response = client.audio.speech.create(
             model="tts-1",
             voice=voice,
-            input=text
+            input=text,
+            response_format="mp3",
+            speed=1.0
         )
         
         # Sauvegarder l'audio dans un fichier temporaire
@@ -86,44 +88,14 @@ with main_col1:
     st.header("Lecteur de Podcast")
     
     if st.session_state.podcast_path:
-        # Afficher le lecteur audio
-        st.audio(st.session_state.podcast_path)
-        
-        # Contrôles du podcast
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("▶️ Lecture"):
-                st.session_state.is_playing = True
-                st.rerun()  # Force le rafraîchissement de la page
-        with col2:
-            if st.button("⏸️ Pause"):
-                st.session_state.is_playing = False
-                st.success("Podcast mis en pause")
-                st.rerun()  # Force le rafraîchissement de la page
-        with col3:
-            if st.button("🔄 Redémarrer"):
-                st.session_state.current_position = 0
-                st.session_state.is_playing = False
-                st.rerun()  # Force le rafraîchissement de la page
-                
-        # Position actuelle (simulée)
-        progress = st.slider(
-            "Position dans le podcast", 
-            0.0, 
-            180.0,  # Supposons une durée maximale de 3 minutes (180 secondes)
-            float(st.session_state.current_position),
-            step=1.0
-        )
-        st.session_state.current_position = progress
-        
-        # Afficher le temps actuel
-        st.text(f"Position actuelle: {int(st.session_state.current_position // 60):02d}:{int(st.session_state.current_position % 60):02d}")
+        # Afficher le lecteur audio avec une clé unique pour forcer le rechargement
+        audio_player = st.empty()
+        audio_player.audio(st.session_state.podcast_path, key=f"podcast_player_{st.session_state.audio_player_key}")
         
         # Afficher la réponse audio si disponible
         if st.session_state.audio_response:
             st.subheader("Réponse de l'IA")
-            st.audio(st.session_state.audio_response)
+            st.audio(st.session_state.audio_response, key=f"response_player_{st.session_state.audio_player_key}")
     else:
         st.info("Veuillez télécharger un podcast pour commencer.")
 
@@ -137,60 +109,48 @@ with main_col2:
         
         if st.button("🔍 Poser la question"):
             if question:
-                # Mettre en pause le podcast
+                # Forcer la mise en pause du podcast en rechargeant le lecteur audio
                 st.session_state.is_playing = False
+                st.session_state.audio_player_key += 1  # Incrémenter pour forcer le rechargement
                 
                 st.success(f"Question posée: {question}")
                 
-                # Traitement de la question avec OpenAI si la clé API est disponible
-                if api_key:
-                    with st.spinner("L'IA prépare une réponse..."):
-                        try:
-                            # Générer la réponse textuelle avec OpenAI
-                            response = client.chat.completions.create(
-                                model="gpt-3.5-turbo",
-                                messages=[
-                                    {"role": "system", "content": "Tu es un expert en géopolitique répondant à des questions sur le conflit Israël-Iran. Réponds de manière concise et factuelle."},
-                                    {"role": "user", "content": question}
-                                ]
-                            )
-                            answer_text = response.choices[0].message.content
-                            
-                            # Générer l'audio de la réponse
-                            with st.spinner("Génération de la réponse audio..."):
-                                audio_path = generate_audio_response(answer_text, voice_model)
-                                if audio_path:
-                                    st.session_state.audio_response = audio_path
-                            
-                            # Stocker la question et la réponse
-                            st.session_state.questions_answers.append({
-                                "question": question,
-                                "answer": answer_text,
-                                "position": st.session_state.current_position,
-                                "audio_path": audio_path
-                            })
-                            
-                            # Afficher la réponse
-                            st.success("Réponse obtenue!")
-                            st.info(answer_text)
-                            
-                            # Forcer le rafraîchissement pour afficher l'audio
-                            st.rerun()
-                            
-                        except Exception as e:
-                            st.error(f"Erreur lors de la génération de la réponse: {str(e)}")
-                else:
-                    # Réponse simulée si pas de clé API
-                    answer_text = "Pour comprendre pourquoi l'Iran a attaqué Israël, il faut considérer plusieurs facteurs historiques et géopolitiques. Les tensions entre ces deux pays remontent à plusieurs décennies, avec l'Iran qui considère Israël comme un ennemi idéologique. L'attaque récente peut être vue comme une escalade dans ce conflit de longue date, potentiellement déclenchée par des actions spécifiques d'Israël ou comme une manœuvre stratégique de l'Iran pour renforcer sa position régionale."
-                    
-                    st.session_state.questions_answers.append({
-                        "question": question,
-                        "answer": answer_text,
-                        "position": st.session_state.current_position
-                    })
-                    
-                    st.info(answer_text)
-                    st.warning("Note: Cette réponse est simulée. Entrez une clé API OpenAI pour des réponses réelles.")
+                # Traitement de la question avec OpenAI
+                with st.spinner("L'IA prépare une réponse..."):
+                    try:
+                        # Générer la réponse textuelle avec OpenAI
+                        response = client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=[
+                                {"role": "system", "content": "Tu es un expert francophone en géopolitique répondant à des questions sur le conflit Israël-Iran. Réponds en français de manière concise et factuelle."},
+                                {"role": "user", "content": question}
+                            ]
+                        )
+                        answer_text = response.choices[0].message.content
+                        
+                        # Générer l'audio de la réponse
+                        with st.spinner("Génération de la réponse audio..."):
+                            audio_path = generate_audio_response(answer_text, voice_model)
+                            if audio_path:
+                                st.session_state.audio_response = audio_path
+                        
+                        # Stocker la question et la réponse
+                        st.session_state.questions_answers.append({
+                            "question": question,
+                            "answer": answer_text,
+                            "position": st.session_state.current_position,
+                            "audio_path": audio_path
+                        })
+                        
+                        # Afficher la réponse
+                        st.success("Réponse obtenue!")
+                        st.info(answer_text)
+                        
+                        # Forcer le rafraîchissement pour afficher l'audio
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"Erreur lors de la génération de la réponse: {str(e)}")
             else:
                 st.warning("Veuillez entrer une question.")
         
@@ -198,7 +158,7 @@ with main_col2:
         if st.session_state.questions_answers:
             st.subheader("Historique des questions")
             for i, qa in enumerate(st.session_state.questions_answers):
-                with st.expander(f"Q{i+1}: {qa['question'][:50]}... (@{int(qa['position']//60):02d}:{int(qa['position']%60):02d})"):
+                with st.expander(f"Q{i+1}: {qa['question'][:50]}..."):
                     st.write(f"**Question:** {qa['question']}")
                     st.write(f"**Réponse:** {qa['answer']}")
                     if "audio_path" in qa and qa["audio_path"]:
