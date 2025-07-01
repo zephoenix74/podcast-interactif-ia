@@ -2,11 +2,7 @@ import streamlit as st
 import numpy as np
 import os
 import tempfile
-from streamlit_webrtc import webrtc_streamer, WebRtcMode
-import queue
-import threading
-import time
-import av
+from openai import OpenAI
 
 # Configuration de la page Streamlit
 st.set_page_config(
@@ -31,15 +27,10 @@ if 'current_position' not in st.session_state:
     st.session_state.current_position = 0
 if 'questions_answers' not in st.session_state:
     st.session_state.questions_answers = []
-if 'audio_buffer' not in st.session_state:
-    st.session_state.audio_buffer = queue.Queue()
-if 'recording' not in st.session_state:
-    st.session_state.recording = False
-if 'recorded_audio' not in st.session_state:
-    st.session_state.recorded_audio = None
 
-# Configuration de l'API OpenAI (à remplacer par votre clé)
+# Configuration de l'API OpenAI
 api_key = st.sidebar.text_input("Clé API OpenAI", type="password")
+client = OpenAI(api_key=api_key) if api_key else None
 
 # Sidebar pour télécharger le podcast et afficher les informations
 st.sidebar.header("Configuration du podcast")
@@ -62,13 +53,6 @@ voice_model = st.sidebar.selectbox(
     ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 )
 
-# Fonction pour traiter l'audio du microphone
-def audio_callback(frame):
-    if st.session_state.recording:
-        sound = frame.to_ndarray()
-        st.session_state.audio_buffer.put(sound)
-    return frame
-
 # Créer une section principale
 main_col1, main_col2 = st.columns([2, 1])
 
@@ -77,7 +61,7 @@ with main_col1:
     
     if st.session_state.podcast_path:
         # Afficher le lecteur audio
-        st.audio(st.session_state.podcast_path, start_time=st.session_state.current_position)
+        st.audio(st.session_state.podcast_path)
         
         # Contrôles du podcast
         col1, col2, col3 = st.columns(3)
@@ -88,6 +72,7 @@ with main_col1:
         with col2:
             if st.button("⏸️ Pause"):
                 st.session_state.is_playing = False
+                st.success("Podcast mis en pause")
         with col3:
             if st.button("🔄 Redémarrer"):
                 st.session_state.current_position = 0
@@ -111,54 +96,66 @@ with main_col1:
 with main_col2:
     st.header("Poser une question")
     
-    # Intégration de WebRTC pour le microphone
+    # Zone de texte pour saisir une question
     if st.session_state.podcast_path:
-        webrtc_ctx = webrtc_streamer(
-            key="speech-to-text",
-            mode=WebRtcMode.SENDONLY,
-            audio_receiver_size=1024,
-            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-            media_stream_constraints={"video": False, "audio": True},
-            video_processor_factory=None
-        )
+        # Saisie de la question par texte (en attendant de résoudre les problèmes audio)
+        question = st.text_area("Tapez votre question ici (MVP) :", height=100)
         
-        # Boutons d'enregistrement
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🎙️ Commencer l'enregistrement"):
-                st.session_state.recording = True
-                st.session_state.is_playing = False  # Mettre en pause le podcast
-                st.session_state.audio_buffer = queue.Queue()
+        if st.button("🔍 Poser la question"):
+            if question:
+                # Mettre en pause le podcast
+                st.session_state.is_playing = False
                 
-        with col2:
-            if st.button("⏹️ Arrêter l'enregistrement"):
-                st.session_state.recording = False
+                st.success(f"Question posée: {question}")
                 
-                # Traitement de l'audio enregistré (pour le MVP, nous simulons)
-                if not st.session_state.audio_buffer.empty():
-                    # Dans un MVP complet, on traiterait l'audio ici
-                    st.session_state.recorded_audio = True
+                # Traitement de la question avec OpenAI si la clé API est disponible
+                if api_key:
+                    with st.spinner("L'IA prépare une réponse..."):
+                        try:
+                            # Générer la réponse textuelle avec OpenAI
+                            response = client.chat.completions.create(
+                                model="gpt-3.5-turbo",
+                                messages=[
+                                    {"role": "system", "content": "Tu es un expert en géopolitique répondant à des questions sur le conflit Israël-Iran. Réponds de manière concise et factuelle."},
+                                    {"role": "user", "content": question}
+                                ]
+                            )
+                            answer_text = response.choices[0].message.content
+                            
+                            # Dans un MVP complet, on convertirait cette réponse en audio avec la voix choisie
+                            # Puis on l'intégrerait au podcast
+                            
+                            # Stocker la question et la réponse
+                            st.session_state.questions_answers.append({
+                                "question": question,
+                                "answer": answer_text,
+                                "position": st.session_state.current_position
+                            })
+                            
+                            # Afficher la réponse
+                            st.success("Réponse obtenue!")
+                            st.info(answer_text)
+                            
+                            # Dans un MVP complet: générer l'audio de la réponse
+                            st.warning("Dans la version complète, cette réponse serait convertie en audio avec la voix choisie.")
+                            
+                        except Exception as e:
+                            st.error(f"Erreur lors de la génération de la réponse: {str(e)}")
+                else:
+                    # Réponse simulée si pas de clé API
+                    answer_text = "Pour comprendre pourquoi l'Iran a attaqué Israël, il faut considérer plusieurs facteurs historiques et géopolitiques. Les tensions entre ces deux pays remontent à plusieurs décennies, avec l'Iran qui considère Israël comme un ennemi idéologique. L'attaque récente peut être vue comme une escalade dans ce conflit de longue date, potentiellement déclenchée par des actions spécifiques d'Israël ou comme une manœuvre stratégique de l'Iran pour renforcer sa position régionale."
                     
-                    # Simulation de question
-                    question = "Quelle est la position actuelle d'Israël dans ce conflit?"
-                    st.success(f"Question enregistrée: {question}")
+                    st.session_state.questions_answers.append({
+                        "question": question,
+                        "answer": answer_text,
+                        "position": st.session_state.current_position
+                    })
                     
-                    # Traitement de la question (simulation pour MVP)
-                    with st.spinner("L'IA prépare une réponse... (simulé pour MVP)"):
-                        # Simulation de réponse
-                        answer_text = "Selon les informations disponibles, Israël maintient une position défensive tout en répondant aux provocations. Le gouvernement israélien a déclaré qu'il continuera à protéger ses frontières et ses citoyens face aux menaces régionales."
-                        
-                        # Stocker la question et la réponse
-                        st.session_state.questions_answers.append({
-                            "question": question,
-                            "answer": answer_text,
-                            "position": st.session_state.current_position
-                        })
+                    st.info(answer_text)
+                    st.warning("Note: Cette réponse est simulée. Entrez une clé API OpenAI pour des réponses réelles.")
+            else:
+                st.warning("Veuillez entrer une question.")
         
-        # Statut d'enregistrement
-        if st.session_state.recording:
-            st.warning("⚠️ Enregistrement en cours... Parlez clairement.")
-            
         # Afficher l'historique des questions et réponses
         if st.session_state.questions_answers:
             st.subheader("Historique des questions")
