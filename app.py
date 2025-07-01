@@ -18,13 +18,9 @@ st.markdown("""
     L'IA répondra avec la voix d'un des animateurs du podcast.
 """)
 
-# Récupération sécurisée de la clé API
-if 'openai_api_key' in st.secrets:
-    client = OpenAI(api_key=st.secrets["openai_api_key"])
-else:
-    # Fallback pour le développement local ou si la clé n'est pas configurée
-    api_key = st.sidebar.text_input("Clé API OpenAI", type="password")
-    client = OpenAI(api_key=api_key) if api_key else None
+# Clé API OpenAI directement dans le code (pour le MVP uniquement)
+OPENAI_API_KEY = "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"  # Remplacez par votre clé
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Définition des variables de session
 if 'podcast_path' not in st.session_state:
@@ -58,20 +54,10 @@ voice_model = st.sidebar.selectbox(
 # Fonction pour générer l'audio TTS
 def generate_audio_response(text, voice):
     try:
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice=voice,
-            input=text,
-            response_format="mp3",
-            speed=1.0
-        )
-        
-        # Sauvegarder l'audio dans un fichier temporaire
-        temp_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3').name
-        with open(temp_path, "wb") as f:
-            f.write(response.content)
-        
-        return temp_path
+        # Utilisez GPT pour générer la réponse mais pas TTS
+        # Simulation de TTS pour le MVP
+        st.warning("Synthèse vocale désactivée dans cette version du MVP. Réponse textuelle uniquement.")
+        return None
     except Exception as e:
         st.error(f"Erreur lors de la génération audio: {str(e)}")
         return None
@@ -83,13 +69,8 @@ with main_col1:
     st.header("Lecteur de Podcast")
     
     if st.session_state.podcast_path:
-        # Afficher le lecteur audio (version simplifiée)
+        # Afficher le lecteur audio
         st.audio(st.session_state.podcast_path)
-        
-        # Afficher la réponse audio si disponible
-        if st.session_state.audio_response:
-            st.subheader("Réponse de l'IA")
-            st.audio(st.session_state.audio_response)
     else:
         st.info("Veuillez télécharger un podcast pour commencer.")
 
@@ -118,25 +99,15 @@ with main_col2:
                         )
                         answer_text = response.choices[0].message.content
                         
-                        # Générer l'audio de la réponse
-                        with st.spinner("Génération de la réponse audio..."):
-                            audio_path = generate_audio_response(answer_text, voice_model)
-                            if audio_path:
-                                st.session_state.audio_response = audio_path
-                        
                         # Stocker la question et la réponse
                         st.session_state.questions_answers.append({
                             "question": question,
-                            "answer": answer_text,
-                            "audio_path": audio_path
+                            "answer": answer_text
                         })
                         
                         # Afficher la réponse
                         st.success("Réponse obtenue!")
                         st.info(answer_text)
-                        
-                        # Forcer le rafraîchissement pour afficher l'audio
-                        st.rerun()
                         
                     except Exception as e:
                         st.error(f"Erreur lors de la génération de la réponse: {str(e)}")
@@ -150,8 +121,6 @@ with main_col2:
                 with st.expander(f"Q{i+1}: {qa['question'][:50]}..."):
                     st.write(f"**Question:** {qa['question']}")
                     st.write(f"**Réponse:** {qa['answer']}")
-                    if "audio_path" in qa and qa["audio_path"]:
-                        st.audio(qa["audio_path"])
 
 # Pied de page
 st.markdown("---")
@@ -165,14 +134,6 @@ def cleanup():
             os.unlink(st.session_state.podcast_path)
         except:
             pass
-    
-    # Nettoyer les fichiers audio temporaires
-    for qa in st.session_state.questions_answers:
-        if "audio_path" in qa and qa["audio_path"] and os.path.exists(qa["audio_path"]):
-            try:
-                os.unlink(qa["audio_path"])
-            except:
-                pass
 
 # Enregistrer la fonction de nettoyage pour qu'elle s'exécute à la fermeture
 import atexit
