@@ -22,7 +22,7 @@ st.markdown("""
 """)
 
 # Clé API OpenAI intégrée directement
-OPENAI_API_KEY = "votre_clé_api_ici"  # Remplacez par votre clé API
+OPENAI_API_KEY = "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"  # Remplacez par votre clé API
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Définition des variables de session
