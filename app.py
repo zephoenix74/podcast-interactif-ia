@@ -1,4 +1,3 @@
-
 import streamlit as st
 import numpy as np
 import os
@@ -21,23 +20,21 @@ st.markdown("""
     L'IA répondra avec la voix d'un des animateurs du podcast.
 """)
 
-# Clé API OpenAI intégrée directement
-OPENAI_API_KEY = "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"  # Remplacez par votre clé API
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Récupération sécurisée de la clé API
+if 'openai' in st.secrets:
+    client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+else:
+    # Fallback pour le développement local ou si la clé n'est pas configurée
+    api_key = st.sidebar.text_input("Clé API OpenAI", type="password")
+    client = OpenAI(api_key=api_key) if api_key else None
 
 # Définition des variables de session
 if 'podcast_path' not in st.session_state:
     st.session_state.podcast_path = None
-if 'is_playing' not in st.session_state:
-    st.session_state.is_playing = False
-if 'current_position' not in st.session_state:
-    st.session_state.current_position = 0
 if 'questions_answers' not in st.session_state:
     st.session_state.questions_answers = []
 if 'audio_response' not in st.session_state:
     st.session_state.audio_response = None
-if 'audio_player_key' not in st.session_state:
-    st.session_state.audio_player_key = 0
 
 # Sidebar pour télécharger le podcast et afficher les informations
 st.sidebar.header("Configuration du podcast")
@@ -88,14 +85,13 @@ with main_col1:
     st.header("Lecteur de Podcast")
     
     if st.session_state.podcast_path:
-        # Afficher le lecteur audio avec une clé unique pour forcer le rechargement
-        audio_player = st.empty()
-        audio_player.audio(st.session_state.podcast_path, key=f"podcast_player_{st.session_state.audio_player_key}")
+        # Afficher le lecteur audio (version simplifiée)
+        st.audio(st.session_state.podcast_path)
         
         # Afficher la réponse audio si disponible
         if st.session_state.audio_response:
             st.subheader("Réponse de l'IA")
-            st.audio(st.session_state.audio_response, key=f"response_player_{st.session_state.audio_player_key}")
+            st.audio(st.session_state.audio_response)
     else:
         st.info("Veuillez télécharger un podcast pour commencer.")
 
@@ -109,10 +105,6 @@ with main_col2:
         
         if st.button("🔍 Poser la question"):
             if question:
-                # Forcer la mise en pause du podcast en rechargeant le lecteur audio
-                st.session_state.is_playing = False
-                st.session_state.audio_player_key += 1  # Incrémenter pour forcer le rechargement
-                
                 st.success(f"Question posée: {question}")
                 
                 # Traitement de la question avec OpenAI
@@ -138,7 +130,7 @@ with main_col2:
                         st.session_state.questions_answers.append({
                             "question": question,
                             "answer": answer_text,
-                            "position": st.session_state.current_position,
+                            "position": 0,  # Simplification pour le MVP
                             "audio_path": audio_path
                         })
                         
