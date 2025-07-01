@@ -1,3 +1,5 @@
 streamlit
 numpy
 openai
+streamlit-webrtc
+pydub
