@@ -1,16 +1,10 @@
 
 import streamlit as st
-import numpy as np
 import os
 import tempfile
-from transformers import pipeline
 import requests
 import json
-import io
 import time
-import base64
-from pydub import AudioSegment
-from pydub.playback import play
 
 # Configuration de la page Streamlit
 st.set_page_config(
@@ -29,10 +23,6 @@ st.markdown("""
 # Définition des variables de session
 if 'podcast_path' not in st.session_state:
     st.session_state.podcast_path = None
-if 'is_playing' not in st.session_state:
-    st.session_state.is_playing = False
-if 'current_position' not in st.session_state:
-    st.session_state.current_position = 0
 if 'questions_answers' not in st.session_state:
     st.session_state.questions_answers = []
 if 'audio_response' not in st.session_state:
@@ -40,7 +30,7 @@ if 'audio_response' not in st.session_state:
 if 'audio_player_key' not in st.session_state:
     st.session_state.audio_player_key = 0
 
-# Configuration des clés API dans la barre latérale (à remplacer par des secrets pour la production)
+# Configuration des clés API dans la barre latérale
 st.sidebar.header("Configuration des API")
 elevenlabs_api_key = st.sidebar.text_input("Clé API ElevenLabs", type="password")
 huggingface_api_key = st.sidebar.text_input("Clé API Hugging Face", type="password")
@@ -75,22 +65,25 @@ voice_id = voice_options[voice_name]
 # Fonction pour générer une réponse texte avec Hugging Face
 def generate_text_response(question, huggingface_api_key):
     try:
-        API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-xxl"
+        API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
         headers = {"Authorization": f"Bearer {huggingface_api_key}"}
         
         # Formater la question pour inclure le contexte du podcast
-        formatted_question = f"Réponds en français à cette question sur le conflit Israël-Iran: {question}"
+        prompt = f"""<s>[INST] Tu es un expert en géopolitique spécialisé dans le conflit Israël-Iran.
+        Réponds à cette question en français, de manière concise et factuelle: {question} [/INST]</s>"""
         
         payload = {
-            "inputs": formatted_question,
+            "inputs": prompt,
             "parameters": {
-                "max_length": 200,
-                "temperature": 0.7
+                "max_new_tokens": 250,
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "do_sample": True
             }
         }
         
         response = requests.post(API_URL, headers=headers, json=payload)
-        return response.json()[0]["generated_text"]
+        return response.json()[0]["generated_text"].split("[/INST]")[1].strip()
     except Exception as e:
         st.error(f"Erreur lors de la génération de la réponse texte: {str(e)}")
         return "Je n'ai pas pu générer une réponse à votre question. Veuillez réessayer."
@@ -133,40 +126,6 @@ def generate_audio_response(text, voice_id, api_key):
         st.error(f"Erreur lors de la génération audio: {str(e)}")
         return None
 
-# Fonctions pour la capture audio depuis le navigateur (avec Web Speech API)
-def add_speech_recognition_js():
-    st.markdown(
-        """
-        <script>
-        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        recognition.lang = 'fr-FR';
-        recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
-        
-        function startRecording() {
-            recognition.start();
-            document.getElementById('status').textContent = 'Écoute en cours...';
-        }
-        
-        recognition.onresult = function(event) {
-            const transcript = event.results[0][0].transcript;
-            document.getElementById('result').value = transcript;
-            document.getElementById('status').textContent = 'Enregistrement terminé';
-            document.getElementById('submit-btn').click();
-        };
-        
-        recognition.onerror = function(event) {
-            document.getElementById('status').textContent = 'Erreur: ' + event.error;
-        };
-        </script>
-        
-        <button onclick="startRecording()">🎤 Poser une question oralement</button>
-        <p id="status">Prêt à enregistrer</p>
-        <input type="hidden" id="result">
-        """,
-        unsafe_allow_html=True
-    )
-
 # Créer une section principale
 main_col1, main_col2 = st.columns([2, 1])
 
@@ -174,13 +133,13 @@ with main_col1:
     st.header("Lecteur de Podcast")
     
     if st.session_state.podcast_path:
-        # Afficher le lecteur audio avec une clé unique pour forcer le rechargement
-        st.audio(st.session_state.podcast_path, key=f"podcast_player_{st.session_state.audio_player_key}")
+        # Afficher le lecteur audio
+        st.audio(st.session_state.podcast_path)
         
         # Afficher la réponse audio si disponible
         if st.session_state.audio_response:
             st.subheader("Réponse de l'IA")
-            st.audio(st.session_state.audio_response, key=f"response_player_{st.session_state.audio_player_key}")
+            st.audio(st.session_state.audio_response)
     else:
         st.info("Veuillez télécharger un podcast pour commencer.")
 
@@ -189,22 +148,13 @@ with main_col2:
     
     # Zone de texte pour saisir une question
     if st.session_state.podcast_path:
-        # Ajout du JavaScript pour la reconnaissance vocale (ne fonctionne pas dans Streamlit Cloud)
-        # add_speech_recognition_js()  # Décommentez pour essayer la reconnaissance vocale
-        
-        # Saisie de la question par texte (alternative à la reconnaissance vocale)
+        # Saisie de la question par texte
         question = st.text_area("Tapez votre question ici :", height=100, 
                                 placeholder="Exemple: Pourquoi l'Iran a attaqué Israël?")
         
-        # Bouton caché pour la soumission depuis JavaScript
-        submit_btn = st.empty()
-        
-        if st.button("🔍 Poser la question", key="submit-btn") or submit_btn:
+        if st.button("🔍 Poser la question"):
             if question:
-                # Forcer la mise en pause du podcast en rechargeant le lecteur audio
-                st.session_state.is_playing = False
-                st.session_state.audio_player_key += 1  # Incrémenter pour forcer le rechargement
-                
+                # Mettre en pause le podcast (simulé dans cette version)
                 st.success(f"Question posée: {question}")
                 
                 # Traitement de la question
@@ -229,7 +179,6 @@ with main_col2:
                             st.session_state.questions_answers.append({
                                 "question": question,
                                 "answer": answer_text,
-                                "position": st.session_state.current_position,
                                 "audio_path": audio_path
                             })
                             
