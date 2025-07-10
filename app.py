@@ -26,6 +26,8 @@ if 'questions_answers' not in st.session_state:
     st.session_state.questions_answers = []
 if 'audio_response' not in st.session_state:
     st.session_state.audio_response = None
+if 'audio_player_key' not in st.session_state:
+    st.session_state.audio_player_key = 0
 
 # Configuration des clés API dans la barre latérale
 st.sidebar.header("Configuration des API")
@@ -59,7 +61,7 @@ voice_options = {
 voice_name = st.sidebar.selectbox("Voix ElevenLabs", list(voice_options.keys()))
 voice_id = voice_options[voice_name]
 
-# Fonction pour générer une réponse texte avec Hugging Face
+# Fonction pour générer une réponse texte avec Hugging Face - VERSION CORRIGÉE
 def generate_text_response(question, huggingface_api_key):
     try:
         API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
@@ -80,7 +82,25 @@ def generate_text_response(question, huggingface_api_key):
         }
         
         response = requests.post(API_URL, headers=headers, json=payload)
-        return response.json()[0]["generated_text"].split("[/INST]")[1].strip()
+        
+        # Vérifier si la réponse est valide
+        if response.status_code != 200:
+            return f"Erreur API Hugging Face: {response.status_code} - {response.text}"
+        
+        response_json = response.json()
+        
+        # Gérer différents formats de réponse possibles
+        if isinstance(response_json, list) and len(response_json) > 0:
+            if "generated_text" in response_json[0]:
+                text = response_json[0]["generated_text"]
+                # Extraire la réponse après [/INST]
+                if "[/INST]" in text:
+                    return text.split("[/INST]")[1].strip()
+                return text
+        
+        # Fallback pour d'autres formats de réponse
+        return str(response_json)
+        
     except Exception as e:
         st.error(f"Erreur lors de la génération de la réponse texte: {str(e)}")
         return "Je n'ai pas pu générer une réponse à votre question. Veuillez réessayer."
@@ -130,13 +150,16 @@ with main_col1:
     st.header("Lecteur de Podcast")
     
     if st.session_state.podcast_path:
+        # Message pour l'utilisateur concernant la pause manuelle
+        st.warning("⚠️ Veuillez mettre le podcast en pause manuellement avant de poser une question.")
+        
         # Afficher le lecteur audio
-        st.audio(st.session_state.podcast_path)
+        st.audio(st.session_state.podcast_path, key=f"podcast_player_{st.session_state.audio_player_key}")
         
         # Afficher la réponse audio si disponible
         if st.session_state.audio_response:
             st.subheader("Réponse de l'IA")
-            st.audio(st.session_state.audio_response)
+            st.audio(st.session_state.audio_response, key=f"response_player_{st.session_state.audio_player_key}")
     else:
         st.info("Veuillez télécharger un podcast pour commencer.")
 
@@ -151,7 +174,9 @@ with main_col2:
         
         if st.button("🔍 Poser la question"):
             if question:
-                # Mettre en pause le podcast (simulé dans cette version)
+                # Incrémenter la clé pour forcer le rechargement du lecteur
+                st.session_state.audio_player_key += 1
+                
                 st.success(f"Question posée: {question}")
                 
                 # Traitement de la question
@@ -184,7 +209,8 @@ with main_col2:
                             st.info(answer_text)
                             
                             # Forcer le rafraîchissement pour afficher l'audio
-                            st.experimental_rerun()
+                            # Correction: st.experimental_rerun() -> st.rerun()
+                            st.rerun()
                             
                         except Exception as e:
                             st.error(f"Erreur lors de la génération de la réponse: {str(e)}")
