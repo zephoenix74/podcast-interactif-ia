@@ -62,29 +62,36 @@ voice_id = voice_options[voice_name]
 # Fonction pour générer une réponse texte avec Hugging Face - VERSION CORRIGÉE
 def generate_text_response(question, huggingface_api_key):
     try:
-        # Use a different model that's more likely to be available
-        API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
+        # Use a general text generation model instead
+        API_URL = "https://api-inference.huggingface.co/models/gpt2-xl"
         headers = {"Authorization": f"Bearer {huggingface_api_key}"}
         
-        # Formater la question pour inclure le contexte du podcast
-        prompt = f"""Tu es un expert en géopolitique spécialisé dans le conflit Israël-Iran.
-        Réponds à cette question en français, de manière concise et factuelle: {question}"""
+        # Format the prompt for a general text model
+        prompt = f"Question: {question}\nAnswer (in French, about the Israel-Iran conflict):"
         
         payload = {
-            "inputs": prompt
+            "inputs": prompt,
+            "parameters": {
+                "max_new_tokens": 250,
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "do_sample": True
+            }
         }
         
         response = requests.post(API_URL, headers=headers, json=payload)
         
-        # Vérifier si la réponse est valide
+        # Check if the response is valid
         if response.status_code != 200:
             return f"Erreur API Hugging Face: {response.status_code} - {response.text}"
         
+        # Get the generated text
         response_json = response.json()
         
-        # Retourner le texte généré
-        if isinstance(response_json, list) and len(response_json) > 0:
-            return response_json[0]["generated_text"]
+        if isinstance(response_json, list):
+            return response_json[0]["generated_text"].split("Answer (in French, about the Israel-Iran conflict):")[1].strip()
+        elif isinstance(response_json, dict) and "generated_text" in response_json:
+            return response_json["generated_text"].split("Answer (in French, about the Israel-Iran conflict):")[1].strip()
         else:
             return str(response_json)
         
