@@ -94,6 +94,7 @@ def generate_simple_response(question):
 # Fonction pour générer l'audio avec ElevenLabs
 def generate_audio_response(text, voice_id, api_key):
     try:
+        st.write("Début de la génération audio...")
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         
         headers = {
@@ -113,14 +114,17 @@ def generate_audio_response(text, voice_id, api_key):
             }
         }
         
+        st.write(f"Envoi de la requête à ElevenLabs avec la voix {voice_id}...")
         response = requests.post(url, json=data, headers=headers)
         
         if response.status_code == 200:
+            st.write("Réponse reçue avec succès!")
             # Sauvegarder l'audio dans un fichier temporaire
             temp_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3').name
             with open(temp_path, "wb") as f:
                 f.write(response.content)
             
+            st.write(f"Fichier audio sauvegardé à {temp_path}")
             return temp_path
         else:
             st.error(f"Erreur API ElevenLabs: {response.status_code} - {response.text}")
