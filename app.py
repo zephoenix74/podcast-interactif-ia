@@ -62,7 +62,7 @@ voice_id = voice_options[voice_name]
 # Fonction pour générer une réponse texte avec Hugging Face - VERSION CORRIGÉE
 def generate_text_response(question, huggingface_api_key):
     try:
-        API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+        API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
         headers = {"Authorization": f"Bearer {huggingface_api_key}"}
         
         # Formater la question pour inclure le contexte du podcast
@@ -88,13 +88,7 @@ def generate_text_response(question, huggingface_api_key):
         response_json = response.json()
         
         # Gérer différents formats de réponse possibles
-        if isinstance(response_json, list) and len(response_json) > 0:
-            if "generated_text" in response_json[0]:
-                text = response_json[0]["generated_text"]
-                # Extraire la réponse après [/INST]
-                if "[/INST]" in text:
-                    return text.split("[/INST]")[1].strip()
-                return text
+return response_json[0]["generated_text"] if isinstance(response_json, list) and len(response_json) > 0 else str(response_json)
         
         # Fallback pour d'autres formats de réponse
         return str(response_json)
