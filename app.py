@@ -62,42 +62,45 @@ voice_id = voice_options[voice_name]
 # Fonction pour générer une réponse texte avec Hugging Face - VERSION CORRIGÉE
 def generate_text_response(question, huggingface_api_key):
     try:
-        # Use a general text generation model instead
-        API_URL = "https://api-inference.huggingface.co/models/gpt2-xl"
+        # Utiliser un modèle français disponible sur Hugging Face
+        API_URL = "https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct"
         headers = {"Authorization": f"Bearer {huggingface_api_key}"}
         
-        # Format the prompt for a general text model
-        prompt = f"Question: {question}\nAnswer (in French, about the Israel-Iran conflict):"
+        # Formater la question pour ce modèle
+        prompt = f"Question: {question}\nRéponse:"
         
         payload = {
             "inputs": prompt,
             "parameters": {
                 "max_new_tokens": 250,
                 "temperature": 0.7,
-                "top_p": 0.95,
-                "do_sample": True
+                "return_full_text": False
             }
         }
         
         response = requests.post(API_URL, headers=headers, json=payload)
         
-        # Check if the response is valid
+        # Vérifier si la réponse est valide
         if response.status_code != 200:
-            return f"Erreur API Hugging Face: {response.status_code} - {response.text}"
+            # Si l'API Hugging Face échoue, utiliser une réponse prédéfinie
+            return f"Je n'ai pas pu obtenir une réponse de l'API Hugging Face (erreur {response.status_code}). Voici une réponse sur le conflit Israël-Iran :\n\nLe conflit entre Israël et l'Iran est complexe et multidimensionnel. L'Iran ne reconnaît pas l'État d'Israël et soutient des groupes comme le Hezbollah et le Hamas qui s'opposent à Israël. Les tensions récentes incluent des accusations mutuelles d'attaques, l'opposition iranienne au programme nucléaire israélien, et les préoccupations israéliennes concernant le programme nucléaire iranien."
         
-        # Get the generated text
         response_json = response.json()
         
-        if isinstance(response_json, list):
-            return response_json[0]["generated_text"].split("Answer (in French, about the Israel-Iran conflict):")[1].strip()
+        # Extraire la réponse générée
+        if isinstance(response_json, list) and len(response_json) > 0:
+            generated_text = response_json[0].get("generated_text", "")
+            return generated_text
         elif isinstance(response_json, dict) and "generated_text" in response_json:
-            return response_json["generated_text"].split("Answer (in French, about the Israel-Iran conflict):")[1].strip()
+            return response_json["generated_text"]
         else:
             return str(response_json)
         
     except Exception as e:
+        # En cas d'erreur, fournir une réponse de secours
         st.error(f"Erreur lors de la génération de la réponse texte: {str(e)}")
-        return "Je n'ai pas pu générer une réponse à votre question. Veuillez réessayer."
+        return "Le conflit entre Israël et l'Iran est un sujet géopolitique complexe impliquant des tensions historiques, religieuses et stratégiques. L'Iran ne reconnaît pas l'État d'Israël et soutient des groupes comme le Hezbollah et le Hamas. Israël considère le programme nucléaire iranien comme une menace existentielle. Les tensions récentes incluent des échanges d'accusations et parfois des attaques directes ou indirectes."
+
 
 # Fonction pour générer l'audio avec ElevenLabs
 def generate_audio_response(text, voice_id, api_key):
