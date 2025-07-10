@@ -4,7 +4,6 @@ import os
 import tempfile
 import requests
 import json
-import time
 
 # Configuration de la page Streamlit
 st.set_page_config(
@@ -27,8 +26,6 @@ if 'questions_answers' not in st.session_state:
     st.session_state.questions_answers = []
 if 'audio_response' not in st.session_state:
     st.session_state.audio_response = None
-if 'audio_player_key' not in st.session_state:
-    st.session_state.audio_player_key = 0
 
 # Configuration des clés API dans la barre latérale
 st.sidebar.header("Configuration des API")
@@ -187,7 +184,7 @@ with main_col2:
                             st.info(answer_text)
                             
                             # Forcer le rafraîchissement pour afficher l'audio
-                            st.rerun()
+                            st.experimental_rerun()
                             
                         except Exception as e:
                             st.error(f"Erreur lors de la génération de la réponse: {str(e)}")
