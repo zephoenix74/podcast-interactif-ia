@@ -1,4 +1,3 @@
-
 import streamlit as st
 import os
 import tempfile
@@ -28,9 +27,8 @@ if 'audio_response' not in st.session_state:
     st.session_state.audio_response = None
 
 # Configuration des clés API dans la barre latérale
-st.sidebar.header("Configuration des API")
+st.sidebar.header("Configuration de l'API")
 elevenlabs_api_key = st.sidebar.text_input("Clé API ElevenLabs", type="password")
-huggingface_api_key = st.sidebar.text_input("Clé API Hugging Face", type="password")
 
 # Sidebar pour télécharger le podcast et afficher les informations
 st.sidebar.header("Configuration du podcast")
@@ -59,48 +57,34 @@ voice_options = {
 voice_name = st.sidebar.selectbox("Voix ElevenLabs", list(voice_options.keys()))
 voice_id = voice_options[voice_name]
 
-# Fonction pour générer une réponse texte avec Hugging Face - VERSION CORRIGÉE
-def generate_text_response(question, huggingface_api_key):
-    try:
-        # Utiliser un modèle français disponible sur Hugging Face
-        API_URL = "https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct"
-        headers = {"Authorization": f"Bearer {huggingface_api_key}"}
-        
-        # Formater la question pour ce modèle
-        prompt = f"Question: {question}\nRéponse:"
-        
-        payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": 250,
-                "temperature": 0.7,
-                "return_full_text": False
-            }
-        }
-        
-        response = requests.post(API_URL, headers=headers, json=payload)
-        
-        # Vérifier si la réponse est valide
-        if response.status_code != 200:
-            # Si l'API Hugging Face échoue, utiliser une réponse prédéfinie
-            return f"Je n'ai pas pu obtenir une réponse de l'API Hugging Face (erreur {response.status_code}). Voici une réponse sur le conflit Israël-Iran :\n\nLe conflit entre Israël et l'Iran est complexe et multidimensionnel. L'Iran ne reconnaît pas l'État d'Israël et soutient des groupes comme le Hezbollah et le Hamas qui s'opposent à Israël. Les tensions récentes incluent des accusations mutuelles d'attaques, l'opposition iranienne au programme nucléaire israélien, et les préoccupations israéliennes concernant le programme nucléaire iranien."
-        
-        response_json = response.json()
-        
-        # Extraire la réponse générée
-        if isinstance(response_json, list) and len(response_json) > 0:
-            generated_text = response_json[0].get("generated_text", "")
-            return generated_text
-        elif isinstance(response_json, dict) and "generated_text" in response_json:
-            return response_json["generated_text"]
-        else:
-            return str(response_json)
-        
-    except Exception as e:
-        # En cas d'erreur, fournir une réponse de secours
-        st.error(f"Erreur lors de la génération de la réponse texte: {str(e)}")
-        return "Le conflit entre Israël et l'Iran est un sujet géopolitique complexe impliquant des tensions historiques, religieuses et stratégiques. L'Iran ne reconnaît pas l'État d'Israël et soutient des groupes comme le Hezbollah et le Hamas. Israël considère le programme nucléaire iranien comme une menace existentielle. Les tensions récentes incluent des échanges d'accusations et parfois des attaques directes ou indirectes."
+# Réponses prédéfinies pour les questions fréquentes sur le conflit Israël-Iran
+predefined_responses = {
+    "iran": "Le conflit entre l'Iran et Israël est complexe et remonte à plusieurs décennies. L'Iran ne reconnaît pas l'État d'Israël et soutient des groupes comme le Hezbollah et le Hamas qui s'opposent à Israël. De son côté, Israël considère le programme nucléaire iranien comme une menace existentielle. Les tensions récentes incluent des accusations mutuelles d'attaques et parfois des confrontations militaires directes.",
+    
+    "attaque": "En avril 2024, l'Iran a lancé une attaque directe contre Israël, impliquant environ 300 drones et missiles, dont la plupart ont été interceptés. Cette attaque était une réponse à une frappe israélienne sur le consulat iranien à Damas, qui a tué plusieurs officiers iraniens. Cet incident représente une escalade significative dans les tensions entre les deux pays.",
+    
+    "nucleaire": "Le programme nucléaire iranien est au cœur des tensions avec Israël. L'Iran affirme que son programme est pacifique et destiné à la production d'énergie, tandis qu'Israël et plusieurs pays occidentaux soupçonnent l'Iran de chercher à développer des armes nucléaires. Ces préoccupations ont conduit à des sanctions internationales contre l'Iran et à des actions clandestines attribuées à Israël pour ralentir le programme nucléaire iranien.",
+    
+    "états-unis": "Les États-Unis jouent un rôle important dans ce conflit. Ils sont un allié proche d'Israël et maintiennent des sanctions économiques contre l'Iran. L'administration américaine a condamné l'attaque iranienne d'avril 2024 et a aidé Israël à intercepter les missiles. Cependant, les États-Unis ont également appelé à la retenue pour éviter une escalade régionale majeure.",
+    
+    "hezbollah": "Le Hezbollah est un groupe armé et politique libanais soutenu par l'Iran. Il constitue une menace significative pour Israël depuis sa frontière nord. Le groupe possède un arsenal important de missiles et de drones, et a été impliqué dans plusieurs conflits avec Israël. Le soutien de l'Iran au Hezbollah est l'un des aspects clés du conflit indirect entre l'Iran et Israël.",
+    
+    "histoire": "Les tensions entre l'Iran et Israël se sont intensifiées après la révolution islamique iranienne de 1979. Avant cette date, sous le règne du Shah, l'Iran et Israël entretenaient des relations relativement cordiales. Depuis, l'Iran a adopté une position hostile envers Israël, le qualifiant de 'petit Satan' et appelant régulièrement à sa destruction. Ce sont des rivalités géopolitiques et idéologiques profondes qui structurent ce conflit.",
+    
+    "default": "Cette question touche à un aspect important du conflit Israël-Iran. Ce conflit implique des tensions historiques, religieuses et géopolitiques complexes. L'Iran ne reconnaît pas l'État d'Israël et soutient des groupes qui s'y opposent, tandis qu'Israël considère le programme nucléaire iranien et les proxys soutenus par l'Iran comme des menaces existentielles. Les tensions récentes incluent des échanges d'accusations et parfois des attaques directes ou indirectes."
+}
 
+# Fonction pour générer une réponse textuelle simple basée sur des mots-clés
+def generate_simple_response(question):
+    question_lower = question.lower()
+    
+    # Vérifier si la question contient des mots-clés connus
+    for keyword, response in predefined_responses.items():
+        if keyword in question_lower:
+            return response
+    
+    # Réponse par défaut si aucun mot-clé n'est trouvé
+    return predefined_responses["default"]
 
 # Fonction pour générer l'audio avec ElevenLabs
 def generate_audio_response(text, voice_id, api_key):
@@ -150,7 +134,7 @@ with main_col1:
         # Message pour l'utilisateur concernant la pause manuelle
         st.warning("⚠️ Veuillez mettre le podcast en pause manuellement avant de poser une question.")
         
-        # Afficher le lecteur audio - VERSION CORRIGÉE SANS CLÉ DYNAMIQUE
+        # Afficher le lecteur audio
         st.audio(st.session_state.podcast_path)
         
         # Afficher la réponse audio si disponible
@@ -173,41 +157,32 @@ with main_col2:
             if question:
                 st.success(f"Question posée: {question}")
                 
-                # Traitement de la question
-                with st.spinner("L'IA prépare une réponse..."):
-                    # Vérifier que les clés API sont disponibles
-                    if not huggingface_api_key:
-                        st.error("Veuillez entrer votre clé API Hugging Face.")
-                    elif not elevenlabs_api_key:
-                        st.error("Veuillez entrer votre clé API ElevenLabs.")
-                    else:
-                        try:
-                            # Générer la réponse textuelle avec Hugging Face
-                            answer_text = generate_text_response(question, huggingface_api_key)
-                            
-                            # Générer l'audio de la réponse avec ElevenLabs
-                            with st.spinner("Génération de la réponse audio..."):
-                                audio_path = generate_audio_response(answer_text, voice_id, elevenlabs_api_key)
-                                if audio_path:
-                                    st.session_state.audio_response = audio_path
-                            
-                            # Stocker la question et la réponse
-                            st.session_state.questions_answers.append({
-                                "question": question,
-                                "answer": answer_text,
-                                "audio_path": audio_path
-                            })
-                            
-                            # Afficher la réponse
-                            st.success("Réponse obtenue!")
-                            st.info(answer_text)
-                            
-                            # Forcer le rafraîchissement pour afficher l'audio
-                            # Correction: utiliser st.rerun() au lieu de st.experimental_rerun()
-                            st.rerun()
-                            
-                        except Exception as e:
-                            st.error(f"Erreur lors de la génération de la réponse: {str(e)}")
+                # Générer une réponse simple basée sur des mots-clés
+                answer_text = generate_simple_response(question)
+                
+                # Vérifier que la clé API ElevenLabs est disponible
+                if not elevenlabs_api_key:
+                    st.error("Veuillez entrer votre clé API ElevenLabs pour générer la réponse audio.")
+                else:
+                    # Générer l'audio de la réponse avec ElevenLabs
+                    with st.spinner("Génération de la réponse audio..."):
+                        audio_path = generate_audio_response(answer_text, voice_id, elevenlabs_api_key)
+                        if audio_path:
+                            st.session_state.audio_response = audio_path
+                
+                # Stocker la question et la réponse
+                st.session_state.questions_answers.append({
+                    "question": question,
+                    "answer": answer_text,
+                    "audio_path": st.session_state.audio_response
+                })
+                
+                # Afficher la réponse
+                st.success("Réponse obtenue!")
+                st.info(answer_text)
+                
+                # Forcer le rafraîchissement pour afficher l'audio
+                st.rerun()
             else:
                 st.warning("Veuillez entrer une question.")
         
@@ -224,7 +199,7 @@ with main_col2:
 # Pied de page
 st.markdown("---")
 st.markdown("Podcast Interactif avec IA - Version MVP")
-st.markdown("Développé avec Streamlit, ElevenLabs et Hugging Face")
+st.markdown("Développé avec Streamlit et ElevenLabs")
 
 # Nettoyage des fichiers temporaires à la fermeture de l'application
 def cleanup():
