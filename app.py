@@ -62,21 +62,16 @@ voice_id = voice_options[voice_name]
 # Fonction pour générer une réponse texte avec Hugging Face - VERSION CORRIGÉE
 def generate_text_response(question, huggingface_api_key):
     try:
+        # Use a different model that's more likely to be available
         API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
         headers = {"Authorization": f"Bearer {huggingface_api_key}"}
         
         # Formater la question pour inclure le contexte du podcast
-        prompt = f"""<s>[INST] Tu es un expert en géopolitique spécialisé dans le conflit Israël-Iran.
-        Réponds à cette question en français, de manière concise et factuelle: {question} [/INST]</s>"""
+        prompt = f"""Tu es un expert en géopolitique spécialisé dans le conflit Israël-Iran.
+        Réponds à cette question en français, de manière concise et factuelle: {question}"""
         
         payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": 250,
-                "temperature": 0.7,
-                "top_p": 0.95,
-                "do_sample": True
-            }
+            "inputs": prompt
         }
         
         response = requests.post(API_URL, headers=headers, json=payload)
@@ -87,11 +82,11 @@ def generate_text_response(question, huggingface_api_key):
         
         response_json = response.json()
         
-        # Gérer différents formats de réponse possibles
-return response_json[0]["generated_text"] if isinstance(response_json, list) and len(response_json) > 0 else str(response_json)
-        
-        # Fallback pour d'autres formats de réponse
-        return str(response_json)
+        # Retourner le texte généré
+        if isinstance(response_json, list) and len(response_json) > 0:
+            return response_json[0]["generated_text"]
+        else:
+            return str(response_json)
         
     except Exception as e:
         st.error(f"Erreur lors de la génération de la réponse texte: {str(e)}")
