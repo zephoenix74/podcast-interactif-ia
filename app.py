@@ -1,3 +1,4 @@
+
 import streamlit as st
 import os
 import tempfile
@@ -70,6 +71,10 @@ predefined_responses = {
     "hezbollah": "Le Hezbollah est un groupe armé et politique libanais soutenu par l'Iran. Il constitue une menace significative pour Israël depuis sa frontière nord. Le groupe possède un arsenal important de missiles et de drones, et a été impliqué dans plusieurs conflits avec Israël. Le soutien de l'Iran au Hezbollah est l'un des aspects clés du conflit indirect entre l'Iran et Israël.",
     
     "histoire": "Les tensions entre l'Iran et Israël se sont intensifiées après la révolution islamique iranienne de 1979. Avant cette date, sous le règne du Shah, l'Iran et Israël entretenaient des relations relativement cordiales. Depuis, l'Iran a adopté une position hostile envers Israël, le qualifiant de 'petit Satan' et appelant régulièrement à sa destruction. Ce sont des rivalités géopolitiques et idéologiques profondes qui structurent ce conflit.",
+    
+    "pourquoi": "L'Iran a attaqué Israël en avril 2024 principalement en réponse à une frappe israélienne sur son consulat à Damas qui a tué plusieurs officiers iraniens. Cette attaque s'inscrit dans un contexte de tensions historiques entre les deux pays, exacerbées par le conflit à Gaza. L'Iran a lancé environ 300 drones et missiles, dont la plupart ont été interceptés par Israël et ses alliés.",
+    
+    "raison": "Les raisons des tensions entre l'Iran et Israël sont multiples : différends idéologiques et religieux, ambitions régionales concurrentes, et le programme nucléaire iranien qu'Israël perçoit comme une menace existentielle. Le soutien de l'Iran à des groupes comme le Hamas et le Hezbollah, qui sont hostiles à Israël, est également une source majeure de conflit.",
     
     "default": "Cette question touche à un aspect important du conflit Israël-Iran. Ce conflit implique des tensions historiques, religieuses et géopolitiques complexes. L'Iran ne reconnaît pas l'État d'Israël et soutient des groupes qui s'y opposent, tandis qu'Israël considère le programme nucléaire iranien et les proxys soutenus par l'Iran comme des menaces existentielles. Les tensions récentes incluent des échanges d'accusations et parfois des attaques directes ou indirectes."
 }
@@ -163,6 +168,7 @@ with main_col2:
                 # Vérifier que la clé API ElevenLabs est disponible
                 if not elevenlabs_api_key:
                     st.error("Veuillez entrer votre clé API ElevenLabs pour générer la réponse audio.")
+                    st.session_state.audio_response = None
                 else:
                     # Générer l'audio de la réponse avec ElevenLabs
                     with st.spinner("Génération de la réponse audio..."):
