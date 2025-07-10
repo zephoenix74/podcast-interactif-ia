@@ -26,8 +26,6 @@ if 'questions_answers' not in st.session_state:
     st.session_state.questions_answers = []
 if 'audio_response' not in st.session_state:
     st.session_state.audio_response = None
-if 'audio_player_key' not in st.session_state:
-    st.session_state.audio_player_key = 0
 
 # Configuration des clés API dans la barre latérale
 st.sidebar.header("Configuration des API")
@@ -153,13 +151,13 @@ with main_col1:
         # Message pour l'utilisateur concernant la pause manuelle
         st.warning("⚠️ Veuillez mettre le podcast en pause manuellement avant de poser une question.")
         
-        # Afficher le lecteur audio
-        st.audio(st.session_state.podcast_path, key=f"podcast_player_{st.session_state.audio_player_key}")
+        # Afficher le lecteur audio - VERSION CORRIGÉE SANS CLÉ DYNAMIQUE
+        st.audio(st.session_state.podcast_path)
         
         # Afficher la réponse audio si disponible
         if st.session_state.audio_response:
             st.subheader("Réponse de l'IA")
-            st.audio(st.session_state.audio_response, key=f"response_player_{st.session_state.audio_player_key}")
+            st.audio(st.session_state.audio_response)
     else:
         st.info("Veuillez télécharger un podcast pour commencer.")
 
@@ -174,9 +172,6 @@ with main_col2:
         
         if st.button("🔍 Poser la question"):
             if question:
-                # Incrémenter la clé pour forcer le rechargement du lecteur
-                st.session_state.audio_player_key += 1
-                
                 st.success(f"Question posée: {question}")
                 
                 # Traitement de la question
@@ -209,7 +204,7 @@ with main_col2:
                             st.info(answer_text)
                             
                             # Forcer le rafraîchissement pour afficher l'audio
-                            # Correction: st.experimental_rerun() -> st.rerun()
+                            # Correction: utiliser st.rerun() au lieu de st.experimental_rerun()
                             st.rerun()
                             
                         except Exception as e:
